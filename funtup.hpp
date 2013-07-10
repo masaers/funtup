@@ -209,7 +209,8 @@ namespace funtup {
   /// returns the result.
   ///
   template<typename func_T, typename... args_T>
-  inline auto apply(func_T&& func, args_T&&... args) ->
+  inline auto
+  apply(func_T&& func, args_T&&... args) ->
   decltype(func(std::forward<args_T>(args)...)) {
     return func(std::forward<args_T>(args)...);
   }
