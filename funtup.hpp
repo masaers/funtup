@@ -1,6 +1,10 @@
+#ifndef FUNTUP_HPP
+#define FUNTUP_HPP
 ///
-/// \file \brief Provides the oportunity to bundle several functors
-/// into a singel object.
+/// \file
+///
+/// \brief Provides the oportunity to bundle several functors into a
+/// singel object.
 ///
 /// \author Markus Saers
 ///
@@ -9,8 +13,10 @@
 #include <functional>
 
 ///
-/// \namespace funtup \brief This namespace provides the capability to
-/// group functors in two ways: as compositions and as batteries.
+/// \namespace funtup
+///
+/// \brief This namespace provides the capability to group functors in
+/// two ways: as compositions and as batteries.
 ///
 /// A composition chains the functors back to back so that a function
 /// is called with the output of the previous function (the first
@@ -123,7 +129,7 @@ namespace funtup {
     template<typename funcs_T, typename... args_T, int... funcs_S>
     inline auto
     _apply_tuple(funcs_T&& funcs,
-		 seq<funcs_S...> fungs_s,
+		 seq<funcs_S...> funcs_s,
 		 args_T&&... args) ->
     decltype(std::make_tuple(_apply_novoid(std::get<funcs_S>(funcs),
 					   std::forward<args_T>(args)...)...)) {
@@ -132,6 +138,8 @@ namespace funtup {
     }
     ///
     /// \name Composed function object
+    ///
+    /// Handles all the messiness of dealing with composed functions.
     ///
     /// \{
     // ---------------------------------------------------------------------- //
@@ -146,11 +154,11 @@ namespace funtup {
     class composition<head_T> {
     public:
       typedef typename std::remove_cv<typename std::remove_reference<head_T>::type>::type head_type;
-      composition() : head_m() {}
-      composition(head_type head) : head_m(head) {}
-      composition(const composition& x) : head_m(x.head_m) {}
-      composition(composition&& x) : head_m(std::move(x.head_m)) {}
-      composition& operator=(composition x) {
+      inline composition() : head_m() {}
+      inline composition(head_type head) : head_m(head) {}
+      inline composition(const composition& x) : head_m(x.head_m) {}
+      inline composition(composition&& x) : head_m(std::move(x.head_m)) {}
+      inline composition& operator=(composition x) {
 	head_m = std::move(x.head_m);
 	return *this;
       }
@@ -169,26 +177,24 @@ namespace funtup {
     class composition<head_T, tails_T...> : public composition<tails_T...> {
     public:
       typedef typename std::remove_cv<typename std::remove_reference<head_T>::type>::type head_type;
-      composition() : composition<tails_T...>(), head_m() {}
-  
-      composition(head_T head, tails_T&&... tails)
+      inline composition() : composition<tails_T...>(), head_m() {}
+      inline composition(head_T head, tails_T&&... tails)
 	: composition<tails_T...>(std::forward<tails_T>(tails)...)
 	, head_m(std::move(head))
       {}
-      composition(const composition& x)
+      inline composition(const composition& x)
 	: composition<tails_T...>(x)
 	, head_m(x.head_m)
       {}
-      composition(composition&& x)
+      inline composition(composition&& x)
 	: composition<tails_T...>(x)
 	, head_m(std::move(x.head_m))
       {}
-      composition& operator=(composition x) {
+      inline composition& operator=(composition x) {
 	head_m = std::move(x.head_m);
 	composition<tails_T...>::operator=(std::move(x));
 	return *this;
       }
-      
       template<typename... args_T>
       inline typename std::result_of<composition<tails_T...>(typename std::result_of<head_type(args_T&&...)>::type)>::type
       operator()(args_T&&... args) const {
@@ -199,9 +205,74 @@ namespace funtup {
     };
     // ---------------------------------------------------------------------- //
     /// \}
+
+
+    ///
+    /// \name Automatic unpacking of function parameters.
+    ///
+    /// Whever a single tuple is passed in as parameter, it is
+    /// automatically unpacked and the content is forwarded to the
+    /// wrapped function as parameters. Any other configuration of
+    /// parameters is forwarded to the wrapped function as is.
+    ///
+    /// \{
+    // ---------------------------------------------------------------------- //
+    ///
+    /// A function that unpacks its second argument and calls its
+    /// first argument with the unpacked parameter list. The third
+    /// parameter is needed for unpacking the second.
+    ///
+    template<typename func_T, typename args_T, int... args_S>
+    inline auto
+    unpack_and_apply(/// The function to call
+		     const func_T& func,
+		     /// A packed representation of the parameters to
+		     /// call the function with
+		     args_T&& args,
+		     /// An index sequence needed to unpack the
+		     /// parameters
+		     seq<args_S...> args_s) ->
+    decltype(func(std::get<args_S>(args)...)) {
+      return func(std::get<args_S>(args)...);
+    }
+    ///
+    /// A wrapper for a function to provide the automatic unpacking of
+    /// a single tuple into a parameter list.
+    ///
+    template<typename func_T>
+    class apply_unpack_t {
+      typedef typename std::remove_cv<typename std::remove_reference<func_T>::type>::type func_type;
+    public:
+      inline apply_unpack_t(func_type func)
+	: func_m(std::move(func))
+      {}
+      template<typename... args_T>
+      inline auto operator()(args_T&&... args) const ->
+      decltype(std::declval<func_type>()(std::forward<args_T>(args)...)) {
+	return func_m(std::forward<args_T>(args)...);
+      }
+      template<typename... args_T>
+      inline auto operator()(std::tuple<args_T...>& args) const ->
+      decltype(unpack_and_apply(std::declval<func_type>(), args, make_seq(args))) {
+	return unpack_and_apply(func_m, args, make_seq(args));
+      }
+      template<typename... args_T>
+      inline auto operator()(const std::tuple<args_T...>& args) const ->
+      decltype(unpack_and_apply(std::declval<func_type>(), args, make_seq(args))) {
+	return unpack_and_apply(func_m, args, make_seq(args));
+      }
+      template<typename... args_T>
+      inline auto operator()(std::tuple<args_T...>&& args) const ->
+      decltype(unpack_and_apply(std::declval<func_type>(), args, make_seq(args))) {
+	return unpack_and_apply(func_m, args, make_seq(args));
+      }
+    private:
+      func_type func_m;
+    };
+    // ---------------------------------------------------------------------- //
+    /// \}
     
   } // namespace funtup_helper
-  
   
   
   ///
@@ -256,22 +327,38 @@ namespace funtup {
   compose(funcs_T&&... funcs) {
     return funtup_helper::composition<funcs_T...>(std::forward<funcs_T>(funcs)...);
   }
-  
 
-  //
-  // Consolidating a tuple of functions into a functor is supported
-  // since g++ 4.6 (only verifed for 4.6.2).
-  //
-#if __GNUC__ < 4 || ( __GNUC__ == 4 && __GNUC_MINOR__ < 6 )
-#else
+  ///
+  /// \brief Transforms a function so that it automatically unpacks a
+  /// singel tuple into a list of parameters.
+  ///
+  /// This is very useful when a function that returns a tuple needs
+  /// to be composed with a function taking multiple arguments.
+  ///
+  /*!\code
+    struct add { int operator()(int a, int b) const { return a + b; } };
+    std::tuple<int, int> divint(int a, int b) {
+      return std::make_tuple(a / b, a % b);
+    }
+    auto c3 = compose(&divint, auto_unpack(add()));
+    assert(c3(5, 2) == 3);
+    \endcode*/
+  template<typename func_T>
+  inline funtup_helper::apply_unpack_t<func_T>
+  auto_unpack(func_T&& func) {
+    return funtup_helper::apply_unpack_t<func_T>(std::forward<func_T>(func));
+  }
+  
   namespace funtup_helper {
     ///
-    /// A wrapper to group several functor into a single object so
+    /// A wrapper to group several functors into a single object so
     /// that they can all be called with the same parameters.
     ///
     template<typename... funcs_T>
     struct battery_t : public std::tuple<funcs_T...> {
-      battery_t(funcs_T&&... funcs) : std::tuple<funcs_T...>(std::forward<funcs_T>(funcs)...) {}
+      inline battery_t(funcs_T&&... funcs)
+	: std::tuple<funcs_T...>(std::forward<funcs_T>(funcs)...)
+      {}
       template<typename... args_T>
       inline auto
       operator()(args_T&&... args) ->
@@ -280,6 +367,7 @@ namespace funtup {
       }
     };
   } // namespace funtup_helper
+  
   ///
   /// \brief Builds a functor from several functors, which will all be
   /// applied to the arguments passed to the built functor and return
@@ -298,7 +386,8 @@ namespace funtup {
   battery(funcs_T&&... funcs) {
     return funtup_helper::battery_t<funcs_T...>(std::forward<funcs_T>(funcs)...);
   }
-#endif
   
   
 } // namespace funtup
+#endif
+

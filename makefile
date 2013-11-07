@@ -4,7 +4,9 @@ OBJDIR=$(BUILDDIR)/obj
 BINDIR=$(BUILDDIR)/bin
 DEPDIR=$(BUILDDIR)/deps
 
-CXXFLAGS+=-Wall -pedantic -std=c++0x -g -O3
+CXX=/usr/local/GNU/gcc-4.8.2/bin/g++
+
+CXXFLAGS+=-Wall -pedantic -std=c++11 -g -O3
 LDFLAGS=
 
 BIN_NAMES=funtup_test
