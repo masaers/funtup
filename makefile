@@ -1,40 +1,35 @@
-SRCDIR=.
-BUILDDIR=build
-OBJDIR=$(BUILDDIR)/obj
-BINDIR=$(BUILDDIR)/bin
-DEPDIR=$(BUILDDIR)/deps
-
-CXX=/usr/local/GNU/gcc-4.8.2/bin/g++
 
 CXXFLAGS+=-Wall -pedantic -std=c++11 -g -O3
 LDFLAGS=
 
 BIN_NAMES=funtup_test
-OBJECTS=$((filter-out $(BIN_NAMES:%=$(SRCDIR)/%.cpp),$(wildcard $(SRCDIR)/*.cpp)):%.cpp=%.o)
+OBJECTS=$((filter-out $(BIN_NAMES:%=%.cpp),$(wildcard *.cpp)):%.cpp=%.o)
 
 
 # Clear default suffix rules
-.SUFFIXES:
-# Keep dirstamps and dependencies between calls
-.PRECIOUS: %/.dirstamp $(DEPDIR)/%.d $(OBJDIR)/%.o
+.SUFFIXES :
+# Keep STAMPs and dependencies between calls
+.PRECIOUS : %/.STAMP build/dep/%.d build/obj/%.o
 
-all: $(BIN_NAMES:%=$(BINDIR)/%)
+all : binaries
 
-$(BINDIR)/%: $(OBJDIR)/%.o $(DEPDIR)/%.d $(OBJECTS) $(BINDIR)/.dirstamp makefile
+binaries : $(BIN_NAMES:%=build/bin/%)
+
+build/bin/% : build/obj/%.o build/dep/%.d $(OBJECTS) build/bin/.STAMP makefile
 	$(CXX) $(LDFLAGS) $< $(OBJECTS) -o $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp $(DEPDIR)/%.d $(OBJDIR)/.dirstamp
+build/obj/%.o : %.cpp build/dep/%.d build/obj/.STAMP
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
--include $(BIN_NAMES:%=$(DEPDIR)/%.d)
+-include $(BIN_NAMES:%=build/dep/%.d)
 
-$(DEPDIR)/%.d: $(SRCDIR)/%.cpp $(DEPDIR)/.dirstamp
+build/dep/%.d : %.cpp build/dep/.STAMP
 	@$(CXX) $(CXXFLAGS) -MM -MT '$@' $< > $@
 
-%/.dirstamp:
+%/.STAMP :
 	@mkdir -p $(@D)
 	@touch $@
 
-clean:
-	@rm -rf $(BINDIR) $(DEPDIR) $(OBJDIR)
+clean :
+	@rm -rf build/bin build/dep build/obj
 
