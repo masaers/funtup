@@ -16,13 +16,13 @@
 /// \namespace funtup
 ///
 /// \brief This namespace provides the capability to group functors in
-/// two ways: as compositions and as batteries.
+/// two ways: as pipes and as batteries.
 ///
-/// A composition chains the functors back to back so that a function
+/// A pipe chains the functors back to back so that a function
 /// is called with the output of the previous function (the first
 /// function is called with the provided arguments). The return value
-/// of the composition function is the return value of the last
-/// composed funtion.
+/// of the <code>pipe</code> function is the return value of the last
+/// funtion in the pipe.
 ///
 /// A battery calles a number of functions with the same arguments,
 /// and returns all the return values as a tuple. So if
@@ -137,28 +137,28 @@ namespace funtup {
 					   std::forward<args_T>(args)...)...);
     }
     ///
-    /// \name Composed function object
+    /// \name Piped function object
     ///
-    /// Handles all the messiness of dealing with composed functions.
+    /// Handles all the messiness of dealing with piped functions.
     ///
     /// \{
     // ---------------------------------------------------------------------- //
     ///
     /// Declaration.
     ///
-    template<typename... funcs_T> class composition;
+    template<typename... funcs_T> class pipe_t;
     ///
     /// Base case.
     ///
     template<typename head_T>
-    class composition<head_T> {
+    class pipe_t<head_T> {
     public:
-      typedef typename std::remove_cv<typename std::remove_reference<head_T>::type>::type head_type;
-      inline composition() : head_m() {}
-      inline composition(head_type head) : head_m(head) {}
-      inline composition(const composition& x) : head_m(x.head_m) {}
-      inline composition(composition&& x) : head_m(std::move(x.head_m)) {}
-      inline composition& operator=(composition x) {
+      typedef head_T head_type;
+      inline pipe_t() : head_m() {}
+      inline pipe_t(head_T&& head) : head_m(std::forward<head_T>(head)) {}
+      inline pipe_t(const pipe_t& x) : head_m(x.head_m) {}
+      inline pipe_t(pipe_t&& x) : head_m(std::move(x.head_m)) {}
+      inline pipe_t& operator=(pipe_t x) {
 	head_m = std::move(x.head_m);
 	return *this;
       }
@@ -174,31 +174,31 @@ namespace funtup {
     /// Inductive case.
     ///
     template<typename head_T, typename... tails_T>
-    class composition<head_T, tails_T...> : public composition<tails_T...> {
+    class pipe_t<head_T, tails_T...> : public pipe_t<tails_T...> {
     public:
-      typedef typename std::remove_cv<typename std::remove_reference<head_T>::type>::type head_type;
-      inline composition() : composition<tails_T...>(), head_m() {}
-      inline composition(head_T head, tails_T&&... tails)
-	: composition<tails_T...>(std::forward<tails_T>(tails)...)
-	, head_m(std::move(head))
+      typedef head_T head_type;
+      inline pipe_t() : pipe_t<tails_T...>(), head_m() {}
+      inline pipe_t(head_T&& head, tails_T&&... tails)
+	: pipe_t<tails_T...>(std::forward<tails_T>(tails)...)
+	, head_m(std::forward<head_T>(head))
       {}
-      inline composition(const composition& x)
-	: composition<tails_T...>(x)
+      inline pipe_t(const pipe_t& x)
+	: pipe_t<tails_T...>(x)
 	, head_m(x.head_m)
       {}
-      inline composition(composition&& x)
-	: composition<tails_T...>(x)
+      inline pipe_t(pipe_t&& x)
+	: pipe_t<tails_T...>(x)
 	, head_m(std::move(x.head_m))
       {}
-      inline composition& operator=(composition x) {
+      inline pipe_t& operator=(pipe_t x) {
 	head_m = std::move(x.head_m);
-	composition<tails_T...>::operator=(std::move(x));
+	pipe_t<tails_T...>::operator=(std::move(x));
 	return *this;
       }
       template<typename... args_T>
-      inline typename std::result_of<composition<tails_T...>(typename std::result_of<head_type(args_T&&...)>::type)>::type
+      inline typename std::result_of<pipe_t<tails_T...>(typename std::result_of<head_type(args_T&&...)>::type)>::type
       operator()(args_T&&... args) const {
-	return composition<tails_T...>::operator()(head_m(std::forward<args_T>(args)...));
+	return pipe_t<tails_T...>::operator()(head_m(std::forward<args_T>(args)...));
       }
     private:
       head_type head_m;
@@ -241,10 +241,11 @@ namespace funtup {
     ///
     template<typename func_T>
     class apply_unpack_t {
-      typedef typename std::remove_cv<typename std::remove_reference<func_T>::type>::type func_type;
+      //      typedef typename std::decayremove_cv<func_T>::type func_type;
+      typedef func_T func_type;
     public:
-      inline apply_unpack_t(func_type func)
-	: func_m(std::move(func))
+      inline apply_unpack_t(func_T&& func)
+	: func_m(std::forward<func_T>(func))
       {}
       template<typename... args_T>
       inline auto operator()(args_T&&... args) const ->
@@ -305,27 +306,25 @@ namespace funtup {
   }
   
   ///
-  /// \brief Composes a series of functors into one functor.
+  /// \brief Pipes a series of functors into one functor.
   ///
-  /// <code>fgh = compose(f, g, h)</code> results in the function
-  /// <code>fgh</code>, which is equivalent to <code>f o g o h</code>
-  /// (where <code>o</code> is the ball operator). calling
-  /// <code>fgh(x)</code> is equivalent to calling
+  /// <code>fgh = pipe(f, g, h)</code> results in the function
+  /// <code>fgh</code>, which equivalent to
   /// <code>h(g(f(x)))</code>. The resulting function object will
   /// assume ownership of (copies of) all functions being passed in.
   ///
   /*!\code
     struct add3 { int operator()(int a) const { return a + 3; } };
     struct mul3 { int operator()(int a) const { return a * 3; } };
-    auto c1 = compose(add3(), mul3());
-    auto c2 = compose(mul3(), add3());
+    auto c1 = pipe(add3(), mul3());
+    auto c2 = pipe(mul3(), add3());
     std::cout << c1(2) << std::endl; // prints 15
     std::cout << c2(2) << std::endl; // prints 9
     \endcode*/
   template<typename... funcs_T>
-  inline funtup_helper::composition<funcs_T...>
-  compose(funcs_T&&... funcs) {
-    return funtup_helper::composition<funcs_T...>(std::forward<funcs_T>(funcs)...);
+  inline funtup_helper::pipe_t<funcs_T...>
+  pipe(funcs_T&&... funcs) {
+    return funtup_helper::pipe_t<funcs_T...>(std::forward<funcs_T>(funcs)...);
   }
 
   ///
@@ -333,14 +332,14 @@ namespace funtup {
   /// singel tuple into a list of parameters.
   ///
   /// This is very useful when a function that returns a tuple needs
-  /// to be composed with a function taking multiple arguments.
+  /// to be pipedto a function taking multiple arguments.
   ///
   /*!\code
     struct add { int operator()(int a, int b) const { return a + b; } };
     std::tuple<int, int> divint(int a, int b) {
       return std::make_tuple(a / b, a % b);
     }
-    auto c3 = compose(&divint, auto_unpack(add()));
+    auto c3 = pipe(&divint, auto_unpack(add()));
     assert(c3(5, 2) == 3);
     \endcode*/
   template<typename func_T>
@@ -369,7 +368,7 @@ namespace funtup {
   } // namespace funtup_helper
   
   ///
-  /// \brief Builds a functor from several functors, which will all be
+  /// Builds a functor from several functors, which will all be
   /// applied to the arguments passed to the built functor and return
   /// the resulting tuple of return values.
   ///
@@ -386,7 +385,18 @@ namespace funtup {
   battery(funcs_T&&... funcs) {
     return funtup_helper::battery_t<funcs_T...>(std::forward<funcs_T>(funcs)...);
   }
-  
+
+  ///
+  /// A function that makes a copy of whatever is passed in.
+  ///
+  /// This is useful when you want a battery or pipe to assume
+  /// ownership of a function.
+  ///
+  template<typename T>
+  typename std::decay<T>::type make_copy(T&& x) {
+    return std::decay<T>::type(std::forward<T>(x));
+  }
+
   
 } // namespace funtup
 #endif
