@@ -67,16 +67,16 @@ namespace funtup {
   /// \brief Constructs a sequence if indices for a variadic pack of
   /// tempalte parameters.
   ///
-  template<typename... _T>
-  inline auto make_seq() -> typename gen_seq<sizeof...(_T)>::type {
-    return typename gen_seq<sizeof...(_T)>::type();
+  template<typename... T>
+  inline auto make_seq() -> typename gen_seq<sizeof...(T)>::type {
+    return typename gen_seq<sizeof...(T)>::type();
   }
   ///
   /// \brief Constructs a sequence of indices for a tuple.
   ///
-  template<typename... _T>
-  inline auto make_seq(const std::tuple<_T...>&) -> typename gen_seq<sizeof...(_T)>::type {
-    return typename gen_seq<sizeof...(_T)>::type();
+  template<typename... T>
+  inline auto make_seq(const std::tuple<T...>&) -> typename gen_seq<sizeof...(T)>::type {
+    return typename gen_seq<sizeof...(T)>::type();
   }
   // ------------------------------------------------------------------------ //
   /// \}
@@ -89,9 +89,9 @@ namespace funtup {
     /// applying a function to a list of parameters results in
     /// <code>void</code> or not.
     ///
-    template<typename func_T, typename... args_T>
+    template<typename Func, typename... Args>
     struct returns_void
-      : public std::is_void<typename std::result_of<func_T(args_T...)>::type>
+      : public std::is_void<typename std::result_of<Func(Args...)>::type>
     {};
     ///
     /// \brief Applies the other parameters to the first parameter and
@@ -102,11 +102,10 @@ namespace funtup {
     /// <code>void_t</code> to protect the caller agains receiving an
     /// unstorable result.
     ///
-    template<typename func_T, typename... args_T>
-    inline typename std::enable_if<returns_void<func_T, args_T...>::value,
-				   void_t>::type
-    _apply_novoid(func_T&& func, args_T&&... args) {
-      func(std::forward<args_T>(args)...);
+    template<typename Func, typename... Args>
+    inline typename std::enable_if<returns_void<Func, Args...>::value, void_t>::type
+    _apply_novoid(Func&& func, Args&&... args) {
+      func(std::forward<Args>(args)...);
       return void_t();
     }
     ///
@@ -116,25 +115,25 @@ namespace funtup {
     /// This version just returns whatever the called function returns
     /// (since it is not void it is storable).
     ///
-    template<typename func_T, typename... args_T>
-    inline typename std::enable_if<! returns_void<func_T, args_T...>::value,
-				   typename std::result_of<func_T(args_T...)>::type>::type
-    _apply_novoid(func_T&& func, args_T&&... args) {
-      return func(std::forward<args_T>(args)...);
+    template<typename Func, typename... Args>
+    inline typename std::enable_if<! returns_void<Func, Args...>::value,
+				   typename std::result_of<Func(Args...)>::type>::type
+    _apply_novoid(Func&& func, Args&&... args) {
+      return func(std::forward<Args>(args)...);
     }
     ///
     /// \brief Function that applies a tuple of functions to the other
     /// parameters and returns the results as a tuple.
     ///
-    template<typename funcs_T, typename... args_T, int... funcs_S>
+    template<typename Funcs, typename... Args, int... I>
     inline auto
-    _apply_tuple(funcs_T&& funcs,
-		 seq<funcs_S...> funcs_s,
-		 args_T&&... args) ->
-    decltype(std::make_tuple(_apply_novoid(std::get<funcs_S>(funcs),
-					   std::forward<args_T>(args)...)...)) {
-      return std::make_tuple(_apply_novoid(std::get<funcs_S>(funcs),
-					   std::forward<args_T>(args)...)...);
+    _apply_tuple(Funcs&& funcs,
+		 seq<I...> funcs_s,
+		 Args&&... args) ->
+    decltype(std::make_tuple(_apply_novoid(std::get<I>(funcs),
+					   std::forward<Args>(args)...)...)) {
+      return std::make_tuple(_apply_novoid(std::get<I>(funcs),
+					   std::forward<Args>(args)...)...);
     }
     ///
     /// \name Piped function object
@@ -146,62 +145,60 @@ namespace funtup {
     ///
     /// Declaration.
     ///
-    template<typename... funcs_T> class pipe_t;
+    template<typename... Funcs> class pipe_t;
     ///
     /// Base case.
     ///
-    template<typename head_T>
-    class pipe_t<head_T> {
+    template<typename Head>
+    class pipe_t<Head> {
     public:
-      typedef head_T head_type;
-      inline pipe_t() : head_m() {}
-      inline pipe_t(head_T&& head) : head_m(std::forward<head_T>(head)) {}
-      inline pipe_t(const pipe_t& x) : head_m(x.head_m) {}
-      inline pipe_t(pipe_t&& x) : head_m(std::move(x.head_m)) {}
-      inline pipe_t& operator=(pipe_t x) {
-	head_m = std::move(x.head_m);
-	return *this;
-      }
-      template<typename... args_T>
-      inline typename std::result_of<head_T(args_T&&...)>::type
-      operator()(args_T&&... args) const {
-	return head_m(std::forward<args_T>(args)...);
+      // inline pipe_t() : head_m() {}
+      inline pipe_t(Head&& head) : head_m(std::forward<Head>(head)) {}
+      // inline pipe_t(const pipe_t& x) : head_m(x.head_m) {}
+      // inline pipe_t(pipe_t&& x) : head_m(std::move(x.head_m)) {}
+      // inline pipe_t& operator=(pipe_t x) {
+      // 	head_m = std::move(x.head_m);
+      // 	return *this;
+      // }
+      template<typename... Args>
+      inline typename std::result_of<Head(Args&&...)>::type
+      operator()(Args&&... args) const {
+	return head_m(std::forward<Args>(args)...);
       }
     private:
-      head_type head_m;
+      Head head_m;
     };
     ///
     /// Inductive case.
     ///
-    template<typename head_T, typename... tails_T>
-    class pipe_t<head_T, tails_T...> : public pipe_t<tails_T...> {
+    template<typename Head, typename... Tails>
+    class pipe_t<Head, Tails...> : public pipe_t<Tails...> {
     public:
-      typedef head_T head_type;
-      inline pipe_t() : pipe_t<tails_T...>(), head_m() {}
-      inline pipe_t(head_T&& head, tails_T&&... tails)
-	: pipe_t<tails_T...>(std::forward<tails_T>(tails)...)
-	, head_m(std::forward<head_T>(head))
+      // inline pipe_t() : pipe_t<tails_T...>(), head_m() {}
+      inline pipe_t(Head&& head, Tails&&... tails)
+	: pipe_t<Tails...>(std::forward<Tails>(tails)...)
+	, head_m(std::forward<Head>(head))
       {}
-      inline pipe_t(const pipe_t& x)
-	: pipe_t<tails_T...>(x)
-	, head_m(x.head_m)
-      {}
-      inline pipe_t(pipe_t&& x)
-	: pipe_t<tails_T...>(x)
-	, head_m(std::move(x.head_m))
-      {}
-      inline pipe_t& operator=(pipe_t x) {
-	head_m = std::move(x.head_m);
-	pipe_t<tails_T...>::operator=(std::move(x));
-	return *this;
-      }
-      template<typename... args_T>
-      inline typename std::result_of<pipe_t<tails_T...>(typename std::result_of<head_type(args_T&&...)>::type)>::type
-      operator()(args_T&&... args) const {
-	return pipe_t<tails_T...>::operator()(head_m(std::forward<args_T>(args)...));
+      // inline pipe_t(const pipe_t& x)
+      // 	: pipe_t<tails_T...>(x)
+      // 	, head_m(x.head_m)
+      // {}
+      // inline pipe_t(pipe_t&& x)
+      // 	: pipe_t<tails_T...>(x)
+      // 	, head_m(std::move(x.head_m))
+      // {}
+      // inline pipe_t& operator=(pipe_t x) {
+      // 	head_m = std::move(x.head_m);
+      // 	pipe_t<tails_T...>::operator=(std::move(x));
+      // 	return *this;
+      // }
+      template<typename... Args>
+      inline typename std::result_of<pipe_t<Tails...>(typename std::result_of<Head(Args&&...)>::type)>::type
+      operator()(Args&&... args) const {
+	return pipe_t<Tails...>::operator()(head_m(std::forward<Args>(args)...));
       }
     private:
-      head_type head_m;
+      Head head_m;
     };
     // ---------------------------------------------------------------------- //
     /// \}
@@ -222,53 +219,51 @@ namespace funtup {
     /// first argument with the unpacked parameter list. The third
     /// parameter is needed for unpacking the second.
     ///
-    template<typename func_T, typename args_T, int... args_S>
+    template<typename Func, typename Args, int... I>
     inline auto
     unpack_and_apply(/// The function to call
-		     const func_T& func,
+		     Func&& func,
 		     /// A packed representation of the parameters to
 		     /// call the function with
-		     args_T&& args,
+		     Args&& args,
 		     /// An index sequence needed to unpack the
 		     /// parameters
-		     seq<args_S...> args_s) ->
-    decltype(func(std::get<args_S>(args)...)) {
-      return func(std::get<args_S>(args)...);
+		     seq<I...> args_s) ->
+    decltype(func(std::get<I>(args)...)) {
+      return func(std::get<I>(args)...);
     }
     ///
     /// A wrapper for a function to provide the automatic unpacking of
     /// a single tuple into a parameter list.
     ///
-    template<typename func_T>
+    template<typename Func>
     class apply_unpack_t {
-      //      typedef typename std::decayremove_cv<func_T>::type func_type;
-      typedef func_T func_type;
     public:
-      inline apply_unpack_t(func_T&& func)
-	: func_m(std::forward<func_T>(func))
+      inline apply_unpack_t(Func&& func)
+	: func_m(std::forward<Func>(func))
       {}
-      template<typename... args_T>
-      inline auto operator()(args_T&&... args) const ->
-      decltype(std::declval<func_type>()(std::forward<args_T>(args)...)) {
-	return func_m(std::forward<args_T>(args)...);
+      template<typename... Args>
+      inline auto operator()(Args&&... args) const ->
+      decltype(std::declval<Func>()(std::forward<Args>(args)...)) {
+	return func_m(std::forward<Args>(args)...);
       }
-      template<typename... args_T>
-      inline auto operator()(std::tuple<args_T...>& args) const ->
-      decltype(unpack_and_apply(std::declval<func_type>(), args, make_seq(args))) {
+      template<typename... Args>
+      inline auto operator()(std::tuple<Args...>& args) const ->
+      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq(args))) {
 	return unpack_and_apply(func_m, args, make_seq(args));
       }
-      template<typename... args_T>
-      inline auto operator()(const std::tuple<args_T...>& args) const ->
-      decltype(unpack_and_apply(std::declval<func_type>(), args, make_seq(args))) {
+      template<typename... Args>
+      inline auto operator()(const std::tuple<Args...>& args) const ->
+      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq(args))) {
 	return unpack_and_apply(func_m, args, make_seq(args));
       }
-      template<typename... args_T>
-      inline auto operator()(std::tuple<args_T...>&& args) const ->
-      decltype(unpack_and_apply(std::declval<func_type>(), args, make_seq(args))) {
+      template<typename... Args>
+      inline auto operator()(std::tuple<Args...>&& args) const ->
+      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq(args))) {
 	return unpack_and_apply(func_m, args, make_seq(args));
       }
     private:
-      func_type func_m;
+      Func func_m;
     };
     // ---------------------------------------------------------------------- //
     /// \}
@@ -280,11 +275,11 @@ namespace funtup {
   /// \brief Appplies the other parameters to the first parameter and
   /// returns the result.
   ///
-  template<typename func_T, typename... args_T>
+  template<typename Func, typename... Args>
   inline auto
-  apply(func_T&& func, args_T&&... args) ->
-  decltype(func(std::forward<args_T>(args)...)) {
-    return func(std::forward<args_T>(args)...);
+  apply(Func&& func, Args&&... args) ->
+  decltype(func(std::forward<Args>(args)...)) {
+    return func(std::forward<Args>(args)...);
   }
   
   ///
@@ -294,15 +289,15 @@ namespace funtup {
   /// This particular implementation calles the functions in the order
   /// they are in in the tuple.
   ///
-  template<typename funcs_T, typename... args_T>
+  template<typename Funcs, typename... Args>
   inline auto
-  apply_tuple(funcs_T&& funcs, args_T&&... args) ->
-  decltype(funtup_helper::_apply_tuple(std::forward<funcs_T>(funcs),
+  apply_tuple(Funcs&& funcs, Args&&... args) ->
+  decltype(funtup_helper::_apply_tuple(std::forward<Funcs>(funcs),
 				       make_seq(funcs),
-				       std::forward<args_T>(args)...)) {
-    return funtup_helper::_apply_tuple(std::forward<funcs_T>(funcs),
+				       std::forward<Args>(args)...)) {
+    return funtup_helper::_apply_tuple(std::forward<Funcs>(funcs),
 				       make_seq(funcs),
-				       std::forward<args_T>(args)...);
+				       std::forward<Args>(args)...);
   }
   
   ///
@@ -310,8 +305,7 @@ namespace funtup {
   ///
   /// <code>fgh = pipe(f, g, h)</code> results in the function
   /// <code>fgh</code>, which equivalent to
-  /// <code>h(g(f(x)))</code>. The resulting function object will
-  /// assume ownership of (copies of) all functions being passed in.
+  /// <code>h(g(f(x)))</code>.
   ///
   /*!\code
     struct add3 { int operator()(int a) const { return a + 3; } };
@@ -321,10 +315,10 @@ namespace funtup {
     std::cout << c1(2) << std::endl; // prints 15
     std::cout << c2(2) << std::endl; // prints 9
     \endcode*/
-  template<typename... funcs_T>
-  inline funtup_helper::pipe_t<funcs_T...>
-  pipe(funcs_T&&... funcs) {
-    return funtup_helper::pipe_t<funcs_T...>(std::forward<funcs_T>(funcs)...);
+  template<typename... Funcs>
+  inline funtup_helper::pipe_t<Funcs...>
+  pipe(Funcs&&... funcs) {
+    return funtup_helper::pipe_t<Funcs...>(std::forward<Funcs>(funcs)...);
   }
 
   ///
@@ -342,10 +336,10 @@ namespace funtup {
     auto c3 = pipe(&divint, auto_unpack(add()));
     assert(c3(5, 2) == 3);
     \endcode*/
-  template<typename func_T>
-  inline funtup_helper::apply_unpack_t<func_T>
-  auto_unpack(func_T&& func) {
-    return funtup_helper::apply_unpack_t<func_T>(std::forward<func_T>(func));
+  template<typename Func>
+  inline funtup_helper::apply_unpack_t<Func>
+  auto_unpack(Func&& func) {
+    return funtup_helper::apply_unpack_t<Func>(std::forward<Func>(func));
   }
   
   namespace funtup_helper {
@@ -353,16 +347,16 @@ namespace funtup {
     /// A wrapper to group several functors into a single object so
     /// that they can all be called with the same parameters.
     ///
-    template<typename... funcs_T>
-    struct battery_t : public std::tuple<funcs_T...> {
-      inline battery_t(funcs_T&&... funcs)
-	: std::tuple<funcs_T...>(std::forward<funcs_T>(funcs)...)
+    template<typename... Funcs>
+    struct battery_t : public std::tuple<Funcs...> {
+      inline battery_t(Funcs&&... funcs)
+	: std::tuple<Funcs...>(std::forward<Funcs>(funcs)...)
       {}
-      template<typename... args_T>
+      template<typename... Args>
       inline auto
-      operator()(args_T&&... args) ->
-      decltype(apply_tuple(std::declval<battery_t>(), std::forward<args_T>(args)...)) {
-	return apply_tuple(*this, std::forward<args_T>(args)...);
+      operator()(Args&&... args) ->
+      decltype(apply_tuple(std::declval<battery_t>(), std::forward<Args>(args)...)) {
+	return apply_tuple(*this, std::forward<Args>(args)...);
       }
     };
   } // namespace funtup_helper
@@ -380,10 +374,10 @@ namespace funtup {
     std::cout << std::get<0>(r) << std::endl; // prints 7
     std::cout << std::get<1>(r) << std::endl; // prints 12
   \endcode*/
-  template<typename... funcs_T>
-  inline funtup_helper::battery_t<funcs_T...>
-  battery(funcs_T&&... funcs) {
-    return funtup_helper::battery_t<funcs_T...>(std::forward<funcs_T>(funcs)...);
+  template<typename... Funcs>
+  inline funtup_helper::battery_t<Funcs...>
+  battery(Funcs&&... funcs) {
+    return funtup_helper::battery_t<Funcs...>(std::forward<Funcs>(funcs)...);
   }
 
   ///
