@@ -152,14 +152,7 @@ namespace funtup {
     template<typename Head>
     class pipe_t<Head> {
     public:
-      // inline pipe_t() : head_m() {}
       inline pipe_t(Head&& head) : head_m(std::forward<Head>(head)) {}
-      // inline pipe_t(const pipe_t& x) : head_m(x.head_m) {}
-      // inline pipe_t(pipe_t&& x) : head_m(std::move(x.head_m)) {}
-      // inline pipe_t& operator=(pipe_t x) {
-      // 	head_m = std::move(x.head_m);
-      // 	return *this;
-      // }
       template<typename... Args>
       inline typename std::result_of<Head(Args&&...)>::type
       operator()(Args&&... args) const {
@@ -167,31 +160,17 @@ namespace funtup {
       }
     private:
       Head head_m;
-    };
+    }; // pipe_t<Head>
     ///
     /// Inductive case.
     ///
     template<typename Head, typename... Tails>
     class pipe_t<Head, Tails...> : public pipe_t<Tails...> {
     public:
-      // inline pipe_t() : pipe_t<tails_T...>(), head_m() {}
       inline pipe_t(Head&& head, Tails&&... tails)
 	: pipe_t<Tails...>(std::forward<Tails>(tails)...)
 	, head_m(std::forward<Head>(head))
       {}
-      // inline pipe_t(const pipe_t& x)
-      // 	: pipe_t<tails_T...>(x)
-      // 	, head_m(x.head_m)
-      // {}
-      // inline pipe_t(pipe_t&& x)
-      // 	: pipe_t<tails_T...>(x)
-      // 	, head_m(std::move(x.head_m))
-      // {}
-      // inline pipe_t& operator=(pipe_t x) {
-      // 	head_m = std::move(x.head_m);
-      // 	pipe_t<tails_T...>::operator=(std::move(x));
-      // 	return *this;
-      // }
       template<typename... Args>
       inline typename std::result_of<pipe_t<Tails...>(typename std::result_of<Head(Args&&...)>::type)>::type
       operator()(Args&&... args) const {
@@ -199,11 +178,59 @@ namespace funtup {
       }
     private:
       Head head_m;
-    };
+    }; // pipe_t<Head, Tails...>
     // ---------------------------------------------------------------------- //
     /// \}
 
 
+    ///
+    /// \name Composed function object
+    ///
+    /// Handles all the messiness of dealing with composed functions.
+    ///
+    /// \{
+    // ---------------------------------------------------------------------- //
+    ///
+    /// Declaration.
+    ///
+	template<typename... Funcs> class compose_t;
+	///
+	/// Base case
+	///
+	template<typename Head>
+	class compose_t<Head> {
+    public:
+	  inline compose_t(Head&& head) : head_m(std::forward<Head>(head)) {}
+	  template<typename... Args>
+	  inline typename std::result_of<Head(Args&&...)>::type
+	  operator()(Args&&... args) const {
+	    return head_m(std::forward<Args>(args)...);
+	  }
+	private:
+	  Head head_m;
+	}; // compose_t<Head>
+	///
+	/// Inductive case
+	///
+	template<typename Head, typename... Tails>
+	class compose_t<Head, Tails...> : public compose_t<Tails...> {
+	public:
+	  inline compose_t(Head&& head, Tails&&... tails)
+	    : compose_t<Tails...>(std::forward<Tails>(tails)...)
+	    , head_m(std::forward<Head>(head))
+      {}
+      template<typename... Args>
+      inline typename std::result_of<Head(typename std::result_of<compose_t<Tails...>(Args&&...)>::type)>::type
+      operator()(Args&&... args) const {
+        return head_m(compose_t<Tails...>::operator()(std::forward<Args>(args)...));
+      }
+	private:
+	  Head head_m;
+	}; // compose_t<Head, Tails...>
+    // ---------------------------------------------------------------------- //
+    /// \}
+	
+	
     ///
     /// \name Automatic unpacking of function parameters.
     ///
@@ -264,9 +291,10 @@ namespace funtup {
       }
     private:
       Func func_m;
-    };
+    }; // apply_unpack_t
     // ---------------------------------------------------------------------- //
     /// \}
+    
     
   } // namespace funtup_helper
   
@@ -321,6 +349,13 @@ namespace funtup {
     return funtup_helper::pipe_t<Funcs...>(std::forward<Funcs>(funcs)...);
   }
 
+  template<typename... Funcs>
+  inline funtup_helper::compose_t<Funcs...>
+  compose(Funcs&&... funcs) {
+    return funtup_helper::compose_t<Funcs...>(std::forward<Funcs>(funcs)...);
+  }
+  
+  
   ///
   /// \brief Transforms a function so that it automatically unpacks a
   /// singel tuple into a list of parameters.

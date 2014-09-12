@@ -32,6 +32,9 @@ int main(int argc, char** argv) {
   auto p3 = pipe(&divint, auto_unpack(add()));
   assert(p3(5, 2) == 3);
   
+  auto c3 = compose(auto_unpack(add()), &divint);
+  assert(c3(5, 2) == 3);
+  
   return 0;
 }
 
