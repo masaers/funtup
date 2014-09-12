@@ -326,7 +326,7 @@ namespace funtup {
   /// singel tuple into a list of parameters.
   ///
   /// This is very useful when a function that returns a tuple needs
-  /// to be pipedto a function taking multiple arguments.
+  /// to be piped to a function taking multiple arguments.
   ///
   /*!\code
     struct add { int operator()(int a, int b) const { return a + b; } };
@@ -354,7 +354,7 @@ namespace funtup {
       {}
       template<typename... Args>
       inline auto
-      operator()(Args&&... args) ->
+      operator()(Args&&... args) const ->
       decltype(apply_tuple(std::declval<battery_t>(), std::forward<Args>(args)...)) {
 	return apply_tuple(*this, std::forward<Args>(args)...);
       }
@@ -387,7 +387,7 @@ namespace funtup {
   /// ownership of a function.
   ///
   template<typename T>
-  typename std::decay<T>::type make_copy(T&& x) {
+  typename std::decay<T>::type clone(T&& x) {
     return std::decay<T>::type(std::forward<T>(x));
   }
 
