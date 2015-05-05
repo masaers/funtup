@@ -1,5 +1,5 @@
-#ifndef FUNTUP_HPP
-#define FUNTUP_HPP
+#ifndef COM_MASAERS_FUNTUP_HPP
+#define COM_MASAERS_FUNTUP_HPP
 ///
 /// \file
 ///
@@ -12,6 +12,7 @@
 #include <type_traits>
 #include <functional>
 
+namespace com_masaers {
 ///
 /// \namespace funtup
 ///
@@ -52,31 +53,47 @@ namespace funtup {
   /// \{
   // ------------------------------------------------------------------------ //
   ///
-  /// \brief A sequence of indice.
+  /// A sequence of indice.
   ///
   template<int...> struct seq {};
   ///
-  /// \brief Iterative case for generating a sequence of indices.
+  /// Iterative case for generating a sequence of indices.
   ///
   template<int N, int... S> struct gen_seq : gen_seq<N-1, N-1, S...> {};
   ///
-  /// \brief Base-case for generating a sequence of indices.
+  /// Base-case for generating a sequence of indices.
   ///
   template<int... S> struct gen_seq<0, S...> { typedef seq<S...> type; };
   ///
-  /// \brief Constructs a sequence if indices for a variadic pack of
-  /// tempalte parameters.
+  /// Inductive case for generating a sequence of reverse indices.
+  ///
+  template<int N, int... S> struct gen_rseq : gen_rseq<N-1, S..., N-1> {};
+  ///
+  /// Base-case for generating a sequence of reverse indices.
+  ///
+  template<int... S> struct gen_rseq<0, S...> { typedef seq<S...> type; };
+  ///
+  /// Constructs a sequence if indices for a variadic pack of template
+  /// parameters.
   ///
   template<typename... T>
-  inline auto make_seq() -> typename gen_seq<sizeof...(T)>::type {
+  inline constexpr auto make_seq() -> typename gen_seq<sizeof...(T)>::type {
     return typename gen_seq<sizeof...(T)>::type();
   }
   ///
-  /// \brief Constructs a sequence of indices for a tuple.
+  /// Constructs a sequence of indices for a tuple.
   ///
   template<typename... T>
-  inline auto make_seq(const std::tuple<T...>&) -> typename gen_seq<sizeof...(T)>::type {
+  inline constexpr auto make_seq(const std::tuple<T...>&) -> typename gen_seq<sizeof...(T)>::type {
     return typename gen_seq<sizeof...(T)>::type();
+  }
+  ///
+  /// Constructs a reversed sequence if indices for a variadic pack of
+  /// template parameters.
+  ///
+  template<typename... T>
+  inline constexpr auto make_rseq() -> typename gen_rseq<sizeof...(T)>::type {
+    return typename gen_rseq<sizeof...(T)>::type();
   }
   // ------------------------------------------------------------------------ //
   /// \}
@@ -85,7 +102,7 @@ namespace funtup {
   
   namespace funtup_helper {
     ///
-    /// \brief Meta functions that deterins whether the result of
+    /// Meta functions that deterins whether the result of
     /// applying a function to a list of parameters results in
     /// <code>void</code> or not.
     ///
@@ -94,7 +111,7 @@ namespace funtup {
       : public std::is_void<typename std::result_of<Func(Args...)>::type>
     {};
     ///
-    /// \brief Applies the other parameters to the first parameter and
+    /// Applies the other parameters to the first parameter and
     /// returns a storable result.
     ///
     /// This version applies to functions that would normally return
@@ -109,31 +126,27 @@ namespace funtup {
       return void_t();
     }
     ///
-    /// \brief Applies the othe parameters to the first parameter and
-    /// returns a storable result.
+    /// Applies the othe parameters to the first parameter and returns
+    /// a storable result.
     ///
     /// This version just returns whatever the called function returns
     /// (since it is not void it is storable).
     ///
     template<typename Func, typename... Args>
-    inline typename std::enable_if<! returns_void<Func, Args...>::value,
-				   typename std::result_of<Func(Args...)>::type>::type
+    inline constexpr typename std::enable_if<! returns_void<Func, Args...>::value, typename std::result_of<Func(Args...)>::type>::type
     _apply_novoid(Func&& func, Args&&... args) {
       return func(std::forward<Args>(args)...);
     }
     ///
-    /// \brief Function that applies a tuple of functions to the other
+    /// Function that applies a tuple of functions to the other
     /// parameters and returns the results as a tuple.
     ///
     template<typename Funcs, typename... Args, int... I>
-    inline auto
-    _apply_tuple(Funcs&& funcs,
-		 seq<I...> funcs_s,
-		 Args&&... args) ->
-    decltype(std::make_tuple(_apply_novoid(std::get<I>(funcs),
-					   std::forward<Args>(args)...)...)) {
-      return std::make_tuple(_apply_novoid(std::get<I>(funcs),
-					   std::forward<Args>(args)...)...);
+    auto constexpr _apply_tuple(Funcs&& funcs,
+                                seq<I...> funcs_s,
+                                Args&&... args)
+      -> decltype(std::make_tuple(_apply_novoid(std::get<I>(funcs), std::forward<Args>(args)...)...)) {
+      return std::make_tuple(_apply_novoid(std::get<I>(funcs), std::forward<Args>(args)...)...);
     }
     ///
     /// \name Piped function object
@@ -193,44 +206,44 @@ namespace funtup {
     ///
     /// Declaration.
     ///
-	template<typename... Funcs> class compose_t;
-	///
-	/// Base case
-	///
-	template<typename Head>
-	class compose_t<Head> {
+    template<typename... Funcs> class compose_t;
+    ///
+    /// Base case
+    ///
+    template<typename Head>
+    class compose_t<Head> {
     public:
-	  inline compose_t(Head&& head) : head_m(std::forward<Head>(head)) {}
-	  template<typename... Args>
-	  inline typename std::result_of<Head(Args&&...)>::type
-	  operator()(Args&&... args) const {
-	    return head_m(std::forward<Args>(args)...);
-	  }
-	private:
-	  Head head_m;
-	}; // compose_t<Head>
-	///
-	/// Inductive case
-	///
-	template<typename Head, typename... Tails>
-	class compose_t<Head, Tails...> : public compose_t<Tails...> {
-	public:
-	  inline compose_t(Head&& head, Tails&&... tails)
-	    : compose_t<Tails...>(std::forward<Tails>(tails)...)
-	    , head_m(std::forward<Head>(head))
+      inline compose_t(Head&& head) : head_m(std::forward<Head>(head)) {}
+      template<typename... Args>
+      inline typename std::result_of<Head(Args&&...)>::type
+      operator()(Args&&... args) const {
+        return head_m(std::forward<Args>(args)...);
+      }
+    private:
+      Head head_m;
+    }; // compose_t<Head>
+    ///
+    /// Inductive case
+    ///
+    template<typename Head, typename... Tails>
+    class compose_t<Head, Tails...> : public compose_t<Tails...> {
+    public:
+      inline compose_t(Head&& head, Tails&&... tails)
+        : compose_t<Tails...>(std::forward<Tails>(tails)...)
+        , head_m(std::forward<Head>(head))
       {}
       template<typename... Args>
       inline typename std::result_of<Head(typename std::result_of<compose_t<Tails...>(Args&&...)>::type)>::type
       operator()(Args&&... args) const {
         return head_m(compose_t<Tails...>::operator()(std::forward<Args>(args)...));
       }
-	private:
-	  Head head_m;
-	}; // compose_t<Head, Tails...>
+    private:
+      Head head_m;
+    }; // compose_t<Head, Tails...>
     // ---------------------------------------------------------------------- //
     /// \}
-	
-	
+    
+    
     ///
     /// \name Automatic unpacking of function parameters.
     ///
@@ -247,7 +260,7 @@ namespace funtup {
     /// parameter is needed for unpacking the second.
     ///
     template<typename Func, typename Args, int... I>
-    inline auto
+    inline constexpr auto
     unpack_and_apply(/// The function to call
 		     Func&& func,
 		     /// A packed representation of the parameters to
@@ -276,18 +289,18 @@ namespace funtup {
       }
       template<typename... Args>
       inline auto operator()(std::tuple<Args...>& args) const ->
-      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq(args))) {
-	return unpack_and_apply(func_m, args, make_seq(args));
+      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq<Args...>())) {
+	return unpack_and_apply(func_m, args, make_seq<Args...>());
       }
       template<typename... Args>
       inline auto operator()(const std::tuple<Args...>& args) const ->
-      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq(args))) {
-	return unpack_and_apply(func_m, args, make_seq(args));
+      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq<Args...>())) {
+	return unpack_and_apply(func_m, args, make_seq<Args...>());
       }
       template<typename... Args>
       inline auto operator()(std::tuple<Args...>&& args) const ->
-      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq(args))) {
-	return unpack_and_apply(func_m, args, make_seq(args));
+      decltype(unpack_and_apply(std::declval<Func>(), args, make_seq<Args...>())) {
+	return unpack_and_apply(func_m, args, make_seq<Args...>());
       }
     private:
       Func func_m;
@@ -300,25 +313,25 @@ namespace funtup {
   
   
   ///
-  /// \brief Appplies the other parameters to the first parameter and
-  /// returns the result.
+  /// Appplies the other parameters to the first parameter and returns
+  /// the result.
   ///
   template<typename Func, typename... Args>
-  inline auto
+  inline constexpr auto
   apply(Func&& func, Args&&... args) ->
   decltype(func(std::forward<Args>(args)...)) {
     return func(std::forward<Args>(args)...);
   }
   
   ///
-  /// \brief Applies a tuple of functions to the other parameters, and
+  /// Applies a tuple of functions to the other parameters, and
   /// returns a corresponding tuple of results.
   ///
   /// This particular implementation calles the functions in the order
   /// they are in in the tuple.
   ///
   template<typename Funcs, typename... Args>
-  inline auto
+  inline constexpr auto
   apply_tuple(Funcs&& funcs, Args&&... args) ->
   decltype(funtup_helper::_apply_tuple(std::forward<Funcs>(funcs),
 				       make_seq(funcs),
@@ -329,7 +342,7 @@ namespace funtup {
   }
   
   ///
-  /// \brief Pipes a series of functors into one functor.
+  /// Pipes a series of functors into one functor.
   ///
   /// <code>fgh = pipe(f, g, h)</code> results in the function
   /// <code>fgh</code>, which equivalent to
@@ -344,21 +357,21 @@ namespace funtup {
     std::cout << c2(2) << std::endl; // prints 9
     \endcode*/
   template<typename... Funcs>
-  inline funtup_helper::pipe_t<Funcs...>
+  inline constexpr funtup_helper::pipe_t<Funcs...>
   pipe(Funcs&&... funcs) {
     return funtup_helper::pipe_t<Funcs...>(std::forward<Funcs>(funcs)...);
   }
 
   template<typename... Funcs>
-  inline funtup_helper::compose_t<Funcs...>
+  inline constexpr funtup_helper::compose_t<Funcs...>
   compose(Funcs&&... funcs) {
     return funtup_helper::compose_t<Funcs...>(std::forward<Funcs>(funcs)...);
   }
   
   
   ///
-  /// \brief Transforms a function so that it automatically unpacks a
-  /// singel tuple into a list of parameters.
+  /// Transforms a function so that it automatically unpacks a singel
+  /// tuple into a list of parameters.
   ///
   /// This is very useful when a function that returns a tuple needs
   /// to be piped to a function taking multiple arguments.
@@ -372,7 +385,7 @@ namespace funtup {
     assert(c3(5, 2) == 3);
     \endcode*/
   template<typename Func>
-  inline funtup_helper::apply_unpack_t<Func>
+  inline constexpr funtup_helper::apply_unpack_t<Func>
   auto_unpack(Func&& func) {
     return funtup_helper::apply_unpack_t<Func>(std::forward<Func>(func));
   }
@@ -410,11 +423,11 @@ namespace funtup {
     std::cout << std::get<1>(r) << std::endl; // prints 12
   \endcode*/
   template<typename... Funcs>
-  inline funtup_helper::battery_t<Funcs...>
+  inline constexpr funtup_helper::battery_t<Funcs...>
   battery(Funcs&&... funcs) {
     return funtup_helper::battery_t<Funcs...>(std::forward<Funcs>(funcs)...);
   }
-
+  
   ///
   /// A function that makes a copy of whatever is passed in.
   ///
@@ -422,11 +435,13 @@ namespace funtup {
   /// ownership of a function.
   ///
   template<typename T>
-  typename std::decay<T>::type clone(T&& x) {
+  inline constexpr typename std::decay<T>::type clone(T&& x) {
     return std::decay<T>::type(std::forward<T>(x));
   }
 
   
 } // namespace funtup
+} // namespace com_masaers
+
 #endif
 

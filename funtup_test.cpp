@@ -13,7 +13,7 @@ std::tuple<int, int> divint(int a, int b) {
 }
 
 int main(int argc, char** argv) {
-  using namespace funtup;
+  using namespace com_masaers::funtup;
   using namespace std;
   
   auto p1 = pipe(add3(), mul3());
